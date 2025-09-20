@@ -1,4 +1,4 @@
-// src/app/auth/reset-password/page.tsx
+// app/auth/reset-password/page.tsx
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
