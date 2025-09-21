@@ -1,6 +1,8 @@
 // backend/server.js
 const express = require("express");
 const dotenv = require("dotenv");
+dotenv.config({ path: "./.env" });
+
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const db = require("./config/db");
@@ -8,8 +10,6 @@ const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const errorHandler = require("./middleware/errorHandler");
 const AppError = require("./utils/appError");
-
-dotenv.config({ path: "./.env" });
 
 const app = express();
 
