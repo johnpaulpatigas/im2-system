@@ -1,4 +1,4 @@
-// app/profile/page.tsx
+// frontend/app/profile/page.tsx
 "use client";
 import { BACKEND_URL } from "@/app/config";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface ExpressUserProfile {
@@ -14,10 +14,13 @@ interface ExpressUserProfile {
   first_name: string;
   last_name: string;
   email: string;
+  liveness_complete: boolean;
+  face_descriptor: number[] | null;
 }
 
 export default function ProfilePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: nextAuthSession, status: nextAuthStatus } = useSession();
 
   const [expressUser, setExpressUser] = useState<ExpressUserProfile | null>(
@@ -28,6 +31,8 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [livenessComplete, setLivenessComplete] = useState(false);
+  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null);
 
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
@@ -46,21 +51,50 @@ export default function ProfilePage() {
   useEffect(() => {
     if (nextAuthStatus === "loading") return;
 
-    if (isAuthenticatedViaNextAuth && nextAuthSession?.user) {
-      setExpressUser(null);
-      setExpressLoading(false);
-      setFirstName(nextAuthSession.user.name?.split(" ")[0] || "");
-      setLastName(
-        nextAuthSession.user.name?.split(" ").slice(1).join(" ") || "",
-      );
-      setEmail(nextAuthSession.user.email || "");
-      setProfileError(null);
-      setPasswordError(null);
-      return;
-    }
+    const fetchUserProfile = async () => {
+      if (isAuthenticatedViaNextAuth && nextAuthSession?.user?.id) {
+        try {
+          const profileResponse = await fetch("/api/user/liveness-status");
+          const profileData = await profileResponse.json();
 
-    if (nextAuthStatus === "unauthenticated") {
-      const fetchExpressProfile = async () => {
+          if (!profileResponse.ok || !profileData.data?.user) {
+            console.error(
+              "Failed to fetch liveness status:",
+              profileData.message,
+            );
+            if (pathname !== "/auth/liveness") {
+              router.push("/auth/liveness");
+            }
+            return;
+          }
+
+          if (!profileData.data.user.livenessComplete) {
+            if (pathname !== "/auth/liveness") {
+              router.push("/auth/liveness");
+            }
+            return;
+          }
+
+          setFirstName(nextAuthSession.user.name?.split(" ")[0] || "");
+          setLastName(
+            nextAuthSession.user.name?.split(" ").slice(1).join(" ") || "",
+          );
+          setEmail(nextAuthSession.user.email || "");
+          setLivenessComplete(profileData.data.user.livenessComplete);
+          setFaceDescriptor(profileData.data.user.faceDescriptor);
+          setProfileError(null);
+          setPasswordError(null);
+        } catch (error) {
+          console.error("Error fetching NextAuth user profile:", error);
+          if (pathname !== "/auth/signin") {
+            router.push("/auth/signin");
+          }
+        }
+        setExpressLoading(false);
+        return;
+      }
+
+      if (nextAuthStatus === "unauthenticated") {
         setExpressLoading(true);
         try {
           const response = await fetch(`${BACKEND_URL}/api/user/profile`, {
@@ -73,7 +107,9 @@ export default function ProfilePage() {
 
           if (!response.ok) {
             if (response.status === 401) {
-              router.push("/auth/signin");
+              if (pathname !== "/auth/signin") {
+                router.push("/auth/signin");
+              }
               return;
             }
             const errorMessage =
@@ -87,7 +123,10 @@ export default function ProfilePage() {
           setFirstName(data.data.user.first_name);
           setLastName(data.data.user.last_name);
           setEmail(data.data.user.email);
+          setLivenessComplete(data.data.user.liveness_complete);
+          setFaceDescriptor(data.data.user.face_descriptor);
           setProfileError(null);
+          setPasswordError(null);
         } catch (err: unknown) {
           let errorMessage =
             "Network error. Failed to load profile from Express.";
@@ -96,15 +135,35 @@ export default function ProfilePage() {
             errorMessage = (err as { message: string }).message;
           setProfileError(errorMessage);
           setExpressUser(null);
-          router.push("/auth/signin");
+          if (pathname !== "/auth/signin") {
+            router.push("/auth/signin");
+          }
         } finally {
           setExpressLoading(false);
         }
-      };
+        return;
+      }
 
-      fetchExpressProfile();
-    }
-  }, [router, nextAuthSession, nextAuthStatus, isAuthenticatedViaNextAuth]);
+      if (
+        !isAuthenticatedViaNextAuth &&
+        !isAuthenticatedViaExpress &&
+        nextAuthStatus !== "loading"
+      ) {
+        if (pathname !== "/auth/signin") {
+          router.push("/auth/signin");
+        }
+      }
+    };
+
+    fetchUserProfile();
+  }, [
+    nextAuthStatus,
+    nextAuthSession,
+    isAuthenticatedViaNextAuth,
+    isAuthenticatedViaExpress,
+    pathname,
+    router,
+  ]);
 
   const handleExpressProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,7 +256,7 @@ export default function ProfilePage() {
       if (err instanceof Error) errorMessage = err.message;
       else if (typeof err === "object" && err !== null && "message" in err)
         errorMessage = (err as { message: string }).message;
-      setPasswordError(errorMessage);
+      setProfileError(errorMessage);
     } finally {
       setPasswordLoading(false);
     }
@@ -221,11 +280,9 @@ export default function ProfilePage() {
     await signOut({ callbackUrl: "/auth/signin" });
   };
 
-  const isLoading =
-    nextAuthStatus === "loading" ||
-    (!isAuthenticatedViaNextAuth && expressLoading);
+  const isLoadingAuthStatus = nextAuthStatus === "loading" || expressLoading;
 
-  if (isLoading) {
+  if (isLoadingAuthStatus) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         Loading authentication status...
@@ -234,7 +291,9 @@ export default function ProfilePage() {
   }
 
   if (!isAuthenticatedViaNextAuth && !isAuthenticatedViaExpress) {
-    router.push("/auth/signin");
+    if (pathname !== "/auth/signin") {
+      router.push("/auth/signin");
+    }
     return null;
   }
 
@@ -295,6 +354,35 @@ export default function ProfilePage() {
                   Email address cannot be changed directly here.
                 </p>
               </div>
+
+              {/* LIVENESS DATA DISPLAY */}
+              <div className="space-y-2">
+                <Label htmlFor="livenessStatus">Liveness Status</Label>
+                <Input
+                  id="livenessStatus"
+                  type="text"
+                  value={livenessComplete ? "Complete" : "Incomplete"}
+                  disabled
+                  className="cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                />
+              </div>
+              {faceDescriptor && (
+                <div className="space-y-2">
+                  <Label>Face Descriptor (first 4 values)</Label>
+                  <Input
+                    type="text"
+                    value={
+                      faceDescriptor
+                        .slice(0, 4)
+                        .map((n) => n.toFixed(4))
+                        .join(", ") + ", ..."
+                    }
+                    disabled
+                    className="cursor-not-allowed bg-gray-100 dark:bg-gray-800"
+                  />
+                </div>
+              )}
+
               {profileError && (
                 <p className="text-sm text-red-500">{profileError}</p>
               )}

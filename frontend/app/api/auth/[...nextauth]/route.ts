@@ -40,11 +40,21 @@ interface UserAttributes extends AdapterUser {
   name: string | null;
   image: string | null;
   emailVerified: Date | null;
+  livenessComplete?: boolean;
+  faceDescriptor?: number[] | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface UserCreationAttributes
-  extends Optional<UserAttributes, "id" | "name" | "image" | "emailVerified"> {}
+  extends Optional<
+    UserAttributes,
+    | "id"
+    | "name"
+    | "image"
+    | "emailVerified"
+    | "livenessComplete"
+    | "faceDescriptor"
+  > {}
 
 class UserModel extends Model<UserAttributes, UserCreationAttributes> {
   declare id: string;
@@ -52,6 +62,8 @@ class UserModel extends Model<UserAttributes, UserCreationAttributes> {
   declare name: string | null;
   declare image: string | null;
   declare emailVerified: Date | null;
+  declare livenessComplete: boolean;
+  declare faceDescriptor: number[] | null;
 }
 UserModel.init(
   {
@@ -64,6 +76,11 @@ UserModel.init(
     email: { type: DataTypes.STRING, unique: true },
     emailVerified: { type: DataTypes.DATE },
     image: { type: DataTypes.STRING },
+    livenessComplete: { type: DataTypes.BOOLEAN, defaultValue: false },
+    faceDescriptor: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
   },
   { sequelize, tableName: "nextauth_users" },
 );

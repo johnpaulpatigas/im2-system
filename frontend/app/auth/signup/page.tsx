@@ -81,7 +81,7 @@ export default function SignUpPage() {
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoading(true);
-    await signIn("google", { callbackUrl: "/profile" });
+    await signIn("google", { callbackUrl: "/auth/liveness" });
     setLoading(false);
   };
 

@@ -21,6 +21,10 @@ export default function RecoveryKeyPage() {
     return null;
   }
 
+  const handleContinue = () => {
+    router.push("/auth/liveness");
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-md">
@@ -43,12 +47,8 @@ export default function RecoveryKeyPage() {
             />
           </div>
 
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => router.push("/profile")}
-          >
-            I have saved my key, continue to profile
+          <Button type="button" className="w-full" onClick={handleContinue}>
+            I have saved my key, continue to Liveness Check
           </Button>
 
           <p className="text-muted-foreground text-sm">

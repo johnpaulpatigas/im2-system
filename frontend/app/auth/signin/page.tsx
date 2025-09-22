@@ -43,8 +43,8 @@ export default function SignInPage() {
         return;
       }
 
-      setSuccess("Logged in successfully! Redirecting to profile...");
-      router.push("/profile");
+      setSuccess("Logged in successfully! Redirecting to liveness check...");
+      router.push("/auth/liveness");
     } catch (err: unknown) {
       let errorMessage = "Network error. Please try again.";
       if (err instanceof Error) {
@@ -61,7 +61,7 @@ export default function SignInPage() {
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoading(true);
-    await signIn("google", { callbackUrl: "/profile" });
+    await signIn("google", { callbackUrl: "/auth/liveness" });
     setLoading(false);
   };
 

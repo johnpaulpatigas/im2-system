@@ -1,0 +1,48 @@
+/* frontend/components/ProgressBar.css */
+.progress-container {
+  display: flex;
+  align-items: center;
+  width: 80%; /* Adjust width as needed */
+  margin: 20px auto;
+  gap: 10px;
+}
+
+.arrow {
+  font-size: 1.5em;
+  color: #007bff;
+  line-height: 1; /* Align vertically with bar */
+}
+
+.progress-bar-background {
+  flex-grow: 1;
+  height: 10px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-bar-filler {
+  height: 100%;
+  background-color: #28a745;
+  border-radius: 5px;
+  transition: width 0.3s ease-out;
+}
+
+.arrow-left {
+  transform: rotate(0deg); /* Default */
+  color: #007bff; /* Color for instruction direction */
+}
+
+.arrow-right {
+  transform: rotate(0deg); /* Default */
+  color: #007bff; /* Color for instruction direction */
+}
+
+/* Optional: style specific arrows based on challenge direction */
+.progress-container .arrow:first-child.arrow-left {
+  color: #28a745; /* Highlight arrow for turn left */
+}
+
+.progress-container .arrow:last-child.arrow-right {
+  color: #28a745; /* Highlight arrow for turn right */
+}

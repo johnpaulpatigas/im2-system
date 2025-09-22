@@ -74,8 +74,10 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      setSuccess("Password reset successfully! Redirecting to profile...");
-      router.push("/profile");
+      setSuccess(
+        "Password reset successfully! Redirecting to liveness check...",
+      );
+      router.push("/auth/liveness");
     } catch (err: unknown) {
       let errorMessage = "Network error. Please try again.";
       if (err instanceof Error) {
