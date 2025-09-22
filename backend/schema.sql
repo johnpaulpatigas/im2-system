@@ -1,4 +1,4 @@
--- schema.sql
+-- backend/schema.sql
 
 CREATE DATABASE IF NOT EXISTS next_auth_db;
 
@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified BOOLEAN DEFAULT FALSE,
     verification_token VARCHAR(255) NULL,
     verification_token_expires DATETIME NULL,
+    liveness_complete BOOLEAN DEFAULT FALSE,
+    face_descriptor JSON NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

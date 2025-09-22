@@ -7,20 +7,14 @@ const { setTokenCookie } = require("../utils/jwt");
 exports.getProfile = async (req, res, next) => {
   try {
     const users = await db.query(
-      "SELECT id, first_name, last_name, email FROM users WHERE id = ?",
+      "SELECT id, first_name, last_name, email, liveness_complete, face_descriptor FROM users WHERE id = ?",
       [req.user.id],
     );
 
     if (!users || users.length === 0) {
       return next(new AppError("User not found.", 404));
     }
-
-    res.status(200).json({
-      status: "success",
-      data: {
-        user: users[0],
-      },
-    });
+    res.status(200).json({ status: "success", data: { user: users[0] } });
   } catch (err) {
     next(err);
   }
@@ -40,16 +34,14 @@ exports.updateProfile = async (req, res, next) => {
     );
 
     const users = await db.query(
-      "SELECT id, first_name, last_name, email FROM users WHERE id = ?",
+      "SELECT id, first_name, last_name, email, liveness_complete, face_descriptor FROM users WHERE id = ?",
       [req.user.id],
     );
 
     res.status(200).json({
       status: "success",
       message: "Profile updated successfully!",
-      data: {
-        user: users[0],
-      },
+      data: { user: users[0] },
     });
   } catch (err) {
     next(err);
