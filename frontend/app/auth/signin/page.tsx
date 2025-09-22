@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signIn } from "next-auth/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,7 +19,7 @@ export default function SignInPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailPasswordSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -37,17 +38,31 @@ export default function SignInPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Sign in failed.");
+        const errorMessage = data.message || "Sign in failed.";
+        setError(errorMessage);
         return;
       }
 
       setSuccess("Logged in successfully! Redirecting to profile...");
       router.push("/profile");
-    } catch {
-      setError("Network error. Please try again.");
+    } catch (err: unknown) {
+      let errorMessage = "Network error. Please try again.";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "object" && err !== null && "message" in err) {
+        errorMessage = (err as { message: string }).message;
+      }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setLoading(true);
+    await signIn("google", { callbackUrl: "/profile" });
+    setLoading(false);
   };
 
   return (
@@ -58,7 +73,7 @@ export default function SignInPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={handleEmailPasswordSignIn}>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -68,6 +83,7 @@ export default function SignInPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
 
@@ -80,6 +96,7 @@ export default function SignInPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
 
@@ -112,7 +129,12 @@ export default function SignInPage() {
           </div>
 
           <div className="space-y-4">
-            <Button variant="secondary" className="w-full">
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={loading}
+            >
               <Image
                 src="/assets/google.svg"
                 alt="Google logo"

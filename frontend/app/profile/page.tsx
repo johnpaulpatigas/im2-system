@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-interface UserProfile {
+interface ExpressUserProfile {
   id: number;
   first_name: string;
   last_name: string;
@@ -18,9 +18,17 @@ interface UserProfile {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const { data: nextAuthSession, status: nextAuthStatus } = useSession();
+
+  const [expressUser, setExpressUser] = useState<ExpressUserProfile | null>(
+    null,
+  );
+  const [expressLoading, setExpressLoading] = useState(true);
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -32,41 +40,73 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [passwordLoading, setPasswordLoading] = useState(false);
 
+  const isAuthenticatedViaNextAuth = nextAuthStatus === "authenticated";
+  const isAuthenticatedViaExpress = expressUser !== null;
+
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const response = await fetch(`${BACKEND_URL}/api/user/profile`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        });
+    if (nextAuthStatus === "loading") return;
 
-        const data = await response.json();
+    if (isAuthenticatedViaNextAuth && nextAuthSession?.user) {
+      setExpressUser(null);
+      setExpressLoading(false);
+      setFirstName(nextAuthSession.user.name?.split(" ")[0] || "");
+      setLastName(
+        nextAuthSession.user.name?.split(" ").slice(1).join(" ") || "",
+      );
+      setEmail(nextAuthSession.user.email || "");
+      setProfileError(null);
+      setPasswordError(null);
+      return;
+    }
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            router.push("/auth/signin");
+    if (nextAuthStatus === "unauthenticated") {
+      const fetchExpressProfile = async () => {
+        setExpressLoading(true);
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/user/profile`, {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            if (response.status === 401) {
+              router.push("/auth/signin");
+              return;
+            }
+            const errorMessage =
+              data.message || "Failed to fetch profile from Express.";
+            setProfileError(errorMessage);
+            setExpressUser(null);
             return;
           }
-          setProfileError(data.message || "Failed to fetch profile.");
-          return;
+
+          setExpressUser(data.data.user);
+          setFirstName(data.data.user.first_name);
+          setLastName(data.data.user.last_name);
+          setEmail(data.data.user.email);
+          setProfileError(null);
+        } catch (err: unknown) {
+          let errorMessage =
+            "Network error. Failed to load profile from Express.";
+          if (err instanceof Error) errorMessage = err.message;
+          else if (typeof err === "object" && err !== null && "message" in err)
+            errorMessage = (err as { message: string }).message;
+          setProfileError(errorMessage);
+          setExpressUser(null);
+          router.push("/auth/signin");
+        } finally {
+          setExpressLoading(false);
         }
+      };
 
-        setUser(data.data.user);
-        setFirstName(data.data.user.first_name);
-        setLastName(data.data.user.last_name);
-      } catch {
-        setProfileError("Network error. Failed to load profile.");
-        router.push("/auth/signin");
-      }
-    };
+      fetchExpressProfile();
+    }
+  }, [router, nextAuthSession, nextAuthStatus, isAuthenticatedViaNextAuth]);
 
-    fetchProfile();
-  }, [router]);
-
-  const handleProfileUpdate = async (e: React.FormEvent) => {
+  const handleExpressProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError(null);
     setProfileSuccess(null);
@@ -75,9 +115,7 @@ export default function ProfilePage() {
     try {
       const response = await fetch(`${BACKEND_URL}/api/user/profile`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ firstName, lastName }),
       });
@@ -85,24 +123,39 @@ export default function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setProfileError(data.message || "Failed to update profile.");
+        const errorMessage = data.message || "Failed to update profile.";
+        setProfileError(errorMessage);
         return;
       }
 
-      setUser(data.data.user);
+      setExpressUser(data.data.user);
       setProfileSuccess("Profile updated successfully!");
-    } catch {
-      setProfileError("Network error. Failed to update profile.");
+    } catch (err: unknown) {
+      let errorMessage = "Network error. Failed to update profile.";
+      if (err instanceof Error) errorMessage = err.message;
+      else if (typeof err === "object" && err !== null && "message" in err)
+        errorMessage = (err as { message: string }).message;
+      setProfileError(errorMessage);
     } finally {
       setProfileLoading(false);
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
+  const handleExpressChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(null);
     setPasswordLoading(true);
+
+    if (
+      currentPassword === "" ||
+      newPassword === "" ||
+      confirmNewPassword === ""
+    ) {
+      setPasswordError("Please fill in all password fields.");
+      setPasswordLoading(false);
+      return;
+    }
 
     if (newPassword !== confirmNewPassword) {
       setPasswordError("New passwords do not match.");
@@ -118,9 +171,7 @@ export default function ProfilePage() {
     try {
       const response = await fetch(`${BACKEND_URL}/api/user/change-password`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           currentPassword,
@@ -132,7 +183,8 @@ export default function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setPasswordError(data.message || "Failed to change password.");
+        const errorMessage = data.message || "Failed to change password.";
+        setPasswordError(errorMessage);
         return;
       }
 
@@ -140,43 +192,50 @@ export default function ProfilePage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
-    } catch {
-      setPasswordError("Network error. Failed to change password.");
+    } catch (err: unknown) {
+      let errorMessage = "Network error. Failed to change password.";
+      if (err instanceof Error) errorMessage = err.message;
+      else if (typeof err === "object" && err !== null && "message" in err)
+        errorMessage = (err as { message: string }).message;
+      setPasswordError(errorMessage);
     } finally {
       setPasswordLoading(false);
     }
   };
 
-  const handleLogout = async () => {
+  const handleExpressLogout = async () => {
     try {
       await fetch(`${BACKEND_URL}/api/auth/logout`, {
         method: "GET",
         credentials: "include",
       });
+      setExpressUser(null);
       router.push("/auth/signin");
     } catch (err) {
-      console.error("Logout failed:", err);
-      alert("Failed to log out. Please try again.");
+      console.error("Express logout failed:", err);
+      alert("Failed to log out from Express. Please try again.");
     }
   };
 
-  if (!user && !profileError) {
+  const handleNextAuthLogout = async () => {
+    await signOut({ callbackUrl: "/auth/signin" });
+  };
+
+  const isLoading =
+    nextAuthStatus === "loading" ||
+    (!isAuthenticatedViaNextAuth && expressLoading);
+
+  if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        Loading profile...
+        Loading authentication status...
       </div>
     );
   }
 
-  if (profileError && user === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-red-500">
-          Error: {profileError}. Please <Link href="/auth/signin">sign in</Link>
-          .
-        </p>
-      </div>
-    );
+  if (!isAuthenticatedViaNextAuth && !isAuthenticatedViaExpress) {
+    router.push("/auth/signin");
+    return null;
   }
 
   return (
@@ -184,15 +243,21 @@ export default function ProfilePage() {
       <Card className="w-full max-w-2xl">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-2xl">Profile</CardTitle>
-          <Button variant="outline" onClick={handleLogout}>
-            Logout
-          </Button>
+          {isAuthenticatedViaNextAuth ? (
+            <Button variant="outline" onClick={handleNextAuthLogout}>
+              Logout (Google)
+            </Button>
+          ) : isAuthenticatedViaExpress ? (
+            <Button variant="outline" onClick={handleExpressLogout}>
+              Logout (Email/Pass)
+            </Button>
+          ) : null}
         </CardHeader>
 
         <CardContent className="space-y-8">
           <div className="space-y-4">
             <h3 className="text-xl font-semibold">Update Profile</h3>
-            <form className="space-y-4" onSubmit={handleProfileUpdate}>
+            <form className="space-y-4" onSubmit={handleExpressProfileUpdate}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
@@ -201,6 +266,7 @@ export default function ProfilePage() {
                     type="text"
                     defaultValue={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
+                    disabled={isAuthenticatedViaNextAuth || profileLoading}
                   />
                 </div>
 
@@ -211,6 +277,7 @@ export default function ProfilePage() {
                     type="text"
                     defaultValue={lastName}
                     onChange={(e) => setLastName(e.target.value)}
+                    disabled={isAuthenticatedViaNextAuth || profileLoading}
                   />
                 </div>
               </div>
@@ -220,7 +287,7 @@ export default function ProfilePage() {
                 <Input
                   id="email"
                   type="email"
-                  defaultValue={user?.email || ""}
+                  defaultValue={email}
                   disabled
                   className="cursor-not-allowed bg-gray-100 dark:bg-gray-800"
                 />
@@ -234,9 +301,18 @@ export default function ProfilePage() {
               {profileSuccess && (
                 <p className="text-sm text-green-500">{profileSuccess}</p>
               )}
-              <Button type="submit" disabled={profileLoading}>
+              <Button
+                type="submit"
+                disabled={profileLoading || isAuthenticatedViaNextAuth}
+              >
                 {profileLoading ? "Saving..." : "Save Profile Changes"}
               </Button>
+              {isAuthenticatedViaNextAuth && (
+                <p className="text-muted-foreground text-sm">
+                  Profile details for Google OAuth accounts are managed via
+                  Google.
+                </p>
+              )}
             </form>
           </div>
 
@@ -253,7 +329,7 @@ export default function ProfilePage() {
 
           <div className="space-y-4">
             <h3 className="text-xl font-semibold">Change Password</h3>
-            <form className="space-y-4" onSubmit={handleChangePassword}>
+            <form className="space-y-4" onSubmit={handleExpressChangePassword}>
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Current Password</Label>
                 <Input
@@ -263,6 +339,7 @@ export default function ProfilePage() {
                   required
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
+                  disabled={isAuthenticatedViaNextAuth || passwordLoading}
                 />
               </div>
 
@@ -275,6 +352,7 @@ export default function ProfilePage() {
                   required
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={isAuthenticatedViaNextAuth || passwordLoading}
                 />
               </div>
 
@@ -287,6 +365,7 @@ export default function ProfilePage() {
                   required
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  disabled={isAuthenticatedViaNextAuth || passwordLoading}
                 />
               </div>
               {passwordError && (
@@ -298,10 +377,15 @@ export default function ProfilePage() {
               <Button
                 type="submit"
                 variant="default"
-                disabled={passwordLoading}
+                disabled={passwordLoading || isAuthenticatedViaNextAuth}
               >
                 {passwordLoading ? "Changing..." : "Change Password"}
               </Button>
+              {isAuthenticatedViaNextAuth && (
+                <p className="text-muted-foreground text-sm">
+                  Password for Google OAuth accounts is managed by Google.
+                </p>
+              )}
             </form>
           </div>
         </CardContent>
